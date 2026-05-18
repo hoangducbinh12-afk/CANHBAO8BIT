@@ -4,7 +4,7 @@ import numpy as np
 import json
 
 # --- 1. GIAO DIỆN ---
-st.set_page_config(page_title="CANH BAO 8 BIT V9.8", layout="wide")
+st.set_page_config(page_title="CANH BAO 8 BIT V9.9", layout="wide")
 st.markdown("""
     <style>
     html, body, [class*="st-"] { color: #000000 !important; background-color: #ffffff !important; font-size: 0.75rem !important; }
@@ -23,23 +23,23 @@ BIT_LABELS = ["Đ.CL", "Đu.CL", "T.CL", "Đ.TB", "Đu.TB", "T.TB", "Hệ", "Hi.
 
 def get_8bit(n):
     val = int(n); d, u = val // 10, val % 10
-    t_dv = (d + u) % 10
-    h_dv = (d - u + 10) % 10
-    return [
-        1 if d % 2 != 0 else 0, 1 if u % 2 != 0 else 0, 1 if (d+u) % 2 != 0 else 0,
-        1 if d >= 5 else 0, 1 if u >= 5 else 0, 1 if t_dv >= 5 else 0,
-        1 if val in SO_THUONG else 0, 1 if h_dv >= 5 else 0
-    ]
+    t_dv, h_dv = (d + u) % 10, (d - u + 10) % 10
+    return [1 if d%2!=0 else 0, 1 if u%2!=0 else 0, 1 if (d+u)%2!=0 else 0, 1 if d>=5 else 0, 1 if u>=5 else 0, 1 if t_dv>=5 else 0, 1 if val in SO_THUONG else 0, 1 if h_dv>=5 else 0]
 
 def get_8bit_str(n): return "".join(map(str, get_8bit(n)))
 
-def analyze_v98(history, last_n):
-    if len(history) < 15: return None, False, [], 0
+def analyze_v99(history, last_n):
+    # Khởi tạo giá trị mặc định nếu thiếu data
+    default_res = [{"l": b, "f": 0.5, "p4": 0.5, "p3": 0.5, "pb": 0.5, "c4": 0, "c3": 0, "cb": 0} for b in BIT_LABELS]
+    default_clusters = [{"bit": get_8bit_str(i), "members": [f"{i:02d}"], "gan": 0} for i in range(100)]
+    
+    if len(history) < 5: return default_res, False, default_clusters, 0
+    
     all_bits = np.array([get_8bit(h["Số"]) for h in history])
     curr_bits = np.array(get_8bit(last_n))
-    
     ranks = [h.get("Rank", 50) for h in history[-10:]]
-    entropy = np.std(ranks); is_chaotic = entropy > 22 or np.mean(ranks) > 60
+    entropy = np.std(ranks) if len(ranks) > 1 else 0
+    is_chaotic = entropy > 22 or np.mean(ranks) > 60
 
     bit_history_str = [get_8bit_str(h["Số"]) for h in history]
     unique_clusters = {}
@@ -70,7 +70,6 @@ def analyze_v98(history, last_n):
         pb = np.mean(pm) if pm else 0.5
         f_prob = (p4 * 0.4) + (p3 * 0.2) + (pb * 0.2) + (np.mean(all_bits[-10:, i]) * 0.2)
         results.append({"l": BIT_LABELS[i], "f": f_prob, "p4": p4, "p3": p3, "pb": pb, "c4": len(m4[-11:]), "c3": len(m3[-22:]), "cb": len(pm)})
-        
     return results, is_chaotic, cluster_gan_data, entropy
 
 # --- 3. SESSION ---
@@ -79,81 +78,71 @@ if 'last_n' not in st.session_state: st.session_state.last_n = -1
 if 'target_q' not in st.session_state: st.session_state.target_q = 59
 
 with st.sidebar:
-    st.header("⚙️ V9.8 CONFIG")
+    st.header("⚙️ V9.9 STABLE")
     up = st.file_uploader("Nạp Master:", type="json")
     if up:
         data = json.load(up); raw = data.get("history", [])
         st.session_state.history = sorted([{"Kỳ": int(h["Kỳ"]), "Số": f"{int(h['Số']):02d}", "Rank": int(h.get("Rank", 0))} for h in raw], key=lambda x: x["Kỳ"])
         st.session_state.last_n = int(st.session_state.history[-1]["Số"])
-    if st.button("🔴 RESET"): st.session_state.history = []; st.rerun()
+    if st.button("🔴 RESET"): st.session_state.history = []; st.session_state.last_n = -1; st.rerun()
 
-# --- 4. MAIN ---
-st.title("🚨 CANH BAO 8 BIT V9.8")
-
-# LUÔN HIỆN Ô NHẬP LIỆU
+# --- 4. UI ---
+st.title("🚨 CANH BAO 8 BIT V9.9")
 c1, c2, c3 = st.columns([1,1,1.5])
 n_in = c1.text_input("Số nổ (nhập tay):")
 current_ky = int(st.session_state.history[-1]["Kỳ"])+1 if st.session_state.history else 1
 ky_in = c2.number_input("Kỳ:", value=current_ky)
 
-# KHỐI PHÂN TÍCH
+# LUÔN PHÂN TÍCH (DÙ RỖNG)
+results, is_chaotic, cluster_gan, entropy = analyze_v99(st.session_state.history, st.session_state.last_n)
+
 if st.session_state.history:
-    results, is_chaotic, cluster_gan, entropy = analyze_v98(st.session_state.history, st.session_state.last_n)
-    
     if is_chaotic: st.markdown(f"<div class='status-chaos'>⚠️ LỒNG QUAY LOẠN (Entropy: {entropy:.2f}). Gợi ý: Dàn 59.</div>", unsafe_allow_html=True)
     else: st.markdown(f"<div class='status-safe'>✅ LỒNG QUAY NGOAN (Entropy: {entropy:.2f}). Gợi ý: Dàn 30.</div>", unsafe_allow_html=True)
 
-    if c3.button("🚀 PHÂN TÍCH"):
-        if n_in:
-            val = int(n_in[-2:]); probs = [r["f"] for r in results]
+if c3.button("🚀 PHÂN TÍCH / LƯU NHẬP TAY"):
+    if n_in:
+        val = int(n_in[-2:]); r_v = 0
+        if len(st.session_state.history) >= 5:
+            probs = [r["f"] for r in results]
             gan_dict = {c['bit']: c['gan'] for c in cluster_gan}
-            scr = []
-            for i in range(100):
-                s_bit = get_8bit_str(i); b = get_8bit(i)
-                m_score = sum(b[j]*probs[j] + (1-b[j])*(1-probs[j]) for j in range(8))
-                bonus = 0.05 * (gan_dict[s_bit] / 40)
-                scr.append({"S": f"{i:02d}", "M": m_score + bonus})
-            df_t = pd.DataFrame(scr).sort_values("M", ascending=False); df_t['R'] = range(1, 101)
-            r_v = df_t[df_t['S'] == f"{val:02d}"]['R'].values[0]
-            st.session_state.history.append({"Kỳ": int(ky_in), "Số": f"{val:02d}", "Rank": r_v}); st.session_state.last_n = val; st.rerun()
+            scr = [{"S":f"{i:02d}", "M":sum(get_8bit(i)[j]*probs[j]+(1-get_8bit(i)[j])*(1-probs[j]) for j in range(8))+(0.05*(gan_dict[get_8bit_str(i)]/40))} for i in range(100)]
+            df_t = pd.DataFrame(scr).sort_values("M", ascending=False); df_t['R'] = range(1,101)
+            r_v = df_t[df_t['S']==f"{val:02d}"]['R'].values[0]
+        st.session_state.history.append({"Kỳ": int(ky_in), "Số": f"{val:02d}", "Rank": r_v})
+        st.session_state.last_n = val; st.rerun()
 
-    tab1, tab2, tab3 = st.tabs(["🎯 DÀN CHIẾN THUẬT", "🕵️ 74 DẠNG BIT & GAN", "📊 NHẬT KÝ ĐẦY ĐỦ"])
+tab1, tab2, tab3 = st.tabs(["🎯 DÀN CHIẾN THUẬT", "🕵️ 74 DẠNG BIT & GAN", "📊 NHẬT KÝ ĐẦY ĐỦ"])
+
+with tab1:
+    cols = st.columns(8)
+    for i, r in enumerate(results):
+        with cols[i]:
+            st.markdown(f"<div class='bit-header'>{BIT_LABELS[i]}</div><div class='bit-card'>4K:{int(r['p4']*100)}%<br>3K:{int(r['p3']*100)}%<br>Hậu:{int(r['pb']*100)}%<br><b>Hội tụ:{int(r['f']*100)}%</b></div>", unsafe_allow_html=True)
     
-    with tab1:
-        cols = st.columns(8)
-        for i, r in enumerate(results):
-            with cols[i]:
-                st.markdown(f"<div class='bit-header'>{BIT_LABELS[i]}</div><div class='bit-card'>4K:{int(r['p4']*100)}%<br>3K:{int(r['p3']*100)}%<br>Hậu:{int(r['pb']*100)}%<br><b>Hội tụ:{int(r['f']*100)}%</b></div>", unsafe_allow_html=True)
-        
-        # Ô NHẬP SỐ QUÂN LINH HOẠT
-        st.divider()
-        default_q = 59 if is_chaotic else 30
-        ca, cb = st.columns([3, 1])
-        st.session_state.target_q = cb.number_input("Số quân muốn lấy:", value=default_q, min_value=1, max_value=100)
-        
-        probs = [r["f"] for r in results]
-        gan_dict = {c['bit']: c['gan'] for c in cluster_gan}
-        final_list = [{"S": f"{i:02d}", "M": sum(get_8bit(i)[j]*probs[j] + (1-get_8bit(i)[j])*(1-probs[j]) for j in range(8)) + (0.05 * (gan_dict[get_8bit_str(i)]/40))} for i in range(100)]
-        df_rank = pd.DataFrame(final_list).sort_values("M", ascending=False)
-        
-        ca.markdown(f"### 🔥 DÀN TINH ANH {st.session_state.target_q} SỐ (Tùy chỉnh)")
-        st.markdown(f"<div class='dan-box'>{' '.join(df_rank.head(st.session_state.target_q)['S'].tolist())}</div>", unsafe_allow_html=True)
+    st.divider()
+    default_q = 59 if is_chaotic else 30
+    ca, cb = st.columns([3, 1])
+    st.session_state.target_q = cb.number_input("Số quân lấy:", value=default_q, min_value=1)
+    
+    probs = [r["f"] for r in results]
+    gan_dict = {c['bit']: c['gan'] for c in cluster_gan}
+    final_list = [{"S": f"{i:02d}", "M": sum(get_8bit(i)[j]*probs[j] + (1-get_8bit(i)[j])*(1-probs[j]) for j in range(8)) + (0.05 * (gan_dict[get_8bit_str(i)]/40))} for i in range(100)]
+    df_rank = pd.DataFrame(final_list).sort_values("M", ascending=False)
+    ca.markdown(f"### 🔥 DÀN TINH ANH {st.session_state.target_q} SỐ")
+    st.markdown(f"<div class='dan-box'>{' '.join(df_rank.head(st.session_state.target_q)['S'].tolist())}</div>", unsafe_allow_html=True)
 
-    with tab2:
-        st.subheader(f"🕵️ TOÀN CẢNH {len(cluster_gan)} DẠNG BIT")
-        for c in sorted(cluster_gan, key=lambda x: x['gan'], reverse=True):
-            with st.expander(f"Mã: {c['bit']} — GAN: {c['gan']} kỳ"):
-                st.write(f"**Thành viên:** {', '.join(c['members'])}")
+with tab2:
+    st.subheader(f"🕵️ TOÀN CẢNH {len(cluster_gan)} DẠNG BIT")
+    for c in sorted(cluster_gan, key=lambda x: x['gan'], reverse=True):
+        with st.expander(f"Mã: {c['bit']} — GAN: {c['gan']} kỳ"):
+            st.write(f"**Thành viên:** {', '.join(c['members'])}")
 
-    with tab3:
+with tab3:
+    if st.session_state.history:
         disp = []
         for h in sorted(st.session_state.history, key=lambda x: x['Kỳ'], reverse=True):
             b = get_8bit(h["Số"])
             disp.append({"Kỳ": h["Kỳ"], "Số": h["Số"], "Rank": h["Rank"], "Đ.CL": "Lẻ" if b[0] else "Chẵn", "Đu.CL": "Lẻ" if b[1] else "Chẵn", "T.CL": "Lẻ" if b[2] else "Chẵn", "Đ.TB": "To" if b[3] else "Bé", "Đu.TB": "To" if b[4] else "Bé", "Hệ": "Thuận" if b[6] else "K.Phải"})
         st.dataframe(pd.DataFrame(disp), use_container_width=True, hide_index=True)
-else:
-    st.warning("⚠️ Mày chưa nạp Master Data nên AI chưa thể tính dàn. Hãy nạp file hoặc nhập tay vài kỳ để bắt đầu!")
-    if c3.button("🚀 LƯU NHẬP TAY (Tạo lịch sử mới)"):
-        if n_in:
-            st.session_state.history.append({"Kỳ": int(ky_in), "Số": f"{int(n_in[-2:]):02d}", "Rank": 0})
-            st.session_state.last_n = int(n_in[-2:]); st.rerun()
+    else: st.info("Chưa có nhật ký.")
