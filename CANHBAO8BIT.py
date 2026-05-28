@@ -6,12 +6,12 @@ import re
 import numpy as np
 
 # --- 1. CSS CHUẨN MOBILE ---
-st.set_page_config(page_title="AI MATRIX PRO V15.6.1", layout="wide")
+st.set_page_config(page_title="AI MATRIX PRO V15.7", layout="wide")
 st.markdown("""
     <style>
     html, body { font-size: 14px !important; background-color: #f8f9fa; }
     .bit-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; }
-    .bit-card { background: #000080; color: white; padding: 10px; border-radius: 8px; text-align: center; min-width: 80px; flex-shrink: 0; }
+    .bit-card { background: #000080; color: white; padding: 10px; border-radius: 8px; text-align: center; min-width: 85px; flex-shrink: 0; }
     .bit-val { font-size: 16px; font-weight: bold; color: #00ff00; }
     .dan-box { padding: 15px; border-radius: 12px; border: 1px solid #e0e0e0; margin-bottom: 15px; background: white; }
     .dan-title { font-weight: bold; font-size: 15px; margin-bottom: 8px; }
@@ -31,112 +31,89 @@ def get_8bit(n):
             1 if d>=5 else 0, 1 if u>=5 else 0, 1 if t_dv>=5 else 0, 
             1 if val in SO_THUONG else 0, 1 if h_dv>=5 else 0]
 
-# --- 3. UI & LOGIC ---
+# --- 3. UI & STATE ---
 if 'data_list' not in st.session_state: st.session_state.data_list = []
 if 'history_log' not in st.session_state: st.session_state.history_log = []
 if 'last_danh_sach' not in st.session_state: st.session_state.last_danh_sach = None
 if 'last_num_soi' not in st.session_state: st.session_state.last_num_soi = None
 
 with st.sidebar:
-    st.title("⚙️ HỆ THỐNG")
+    st.title("⚙️ HỆ THỐNG V15.7")
     up = st.file_uploader("Nạp Data", type=['json'])
     if up:
         raw = json.load(up)
         st.session_state.data_list = raw.get('data', [])
         st.session_state.history_log = raw.get('history', [])
-        if st.session_state.data_list:
-            st.session_state.last_num_soi = st.session_state.data_list[-1]
-        st.success("Đã nạp dữ liệu thành công!")
-    
-    if st.button("🚨 RESET ALL"):
-        st.session_state.clear(); st.rerun()
+        if st.session_state.data_list: st.session_state.last_num_soi = st.session_state.data_list[-1]
+    if st.button("🚨 RESET ALL"): st.session_state.clear(); st.rerun()
 
-st.title("🎯 AI MATRIX V15.6.1")
+st.title("🎯 AI MATRIX PRO (100 KỲ)")
 
 if st.session_state.data_list:
     data = st.session_state.data_list
     
-    # Dashboard Nhịp Bit hiện tại (10 kỳ gần nhất)
+    # Dashboard Nhịp Bit (Vẫn giữ 10 kỳ để thấy biến động gần nhất)
     all_bits = np.array([get_8bit(x) for x in data[-10:]])
     probs = np.mean(all_bits, axis=0)
     st.markdown('<div class="bit-container">' + "".join([f'<div class="bit-card"><div>{BIT_LABELS[i]}</div><div class="bit-val">{int(probs[i]*100)}%</div></div>' for i in range(8)]) + '</div>', unsafe_allow_html=True)
 
-    # Bước 1: Nhập KQ
-    with st.expander("📌 BƯỚC 1: CẬP NHẬT KẾT QUẢ", expanded=True):
+    with st.expander("📌 CẬP NHẬT KẾT QUẢ", expanded=True):
         c1, c2 = st.columns([2, 1])
         new_res = c1.text_input("GĐB vừa nổ:", placeholder="Ví dụ: 23")
         if c2.button("XÁC NHẬN") and new_res:
-            val = int(new_res[-2:])
-            st.session_state.data_list.append(val)
-            st.session_state.last_num_soi = val
-            st.rerun()
+            val = int(new_res[-2:]); st.session_state.data_list.append(val)
+            st.session_state.last_num_soi = val; st.rerun()
 
     st.write("---")
-    
-    # Bước 2: Phân tích theo THUỘC TÍNH (Gen Bit)
     current_val = st.number_input("SOI SAU CON SỐ:", 0, 99, value=st.session_state.last_num_soi if st.session_state.last_num_soi is not None else data[-1])
     
-    if st.button("🚀 QUÉT NHỊP THUỘC TÍNH (GEN BIT)"):
-        # 1. Lấy trạng thái Bit của con số đang chọn
+    if st.button("🚀 QUÉT NHỊP THUỘC TÍNH (100 LẦN GẦN NHẤT)"):
+        # 1. Lấy trạng thái Bit hiện tại
         current_bit_pattern = get_8bit(current_val)
+        follower_bits = []; follower_nums = []
         
-        follower_bits = []
-        follower_nums = []
-        
-        # Quét ngược lịch sử tìm 10 lần xuất hiện trạng thái tương tự
+        # 2. Quét ngược tìm 100 lần xuất hiện trạng thái này
         count = 0
         for i in range(len(data) - 2, -1, -1):
             if get_8bit(data[i]) == current_bit_pattern:
                 follower_nums.append(data[i+1])
                 follower_bits.append(get_8bit(data[i+1]))
                 count += 1
-                if count == 10: break
+                if count == 100: break # Nâng lên 100 lần
         
         if follower_bits:
             f_bits_arr = np.array(follower_bits)
-            # Tìm xu hướng nhịp tiếp theo của các lần đó
-            target_pattern = [1 if np.mean(f_bits_arr[:, j]) >= 0.5 else 0 for j in range(8)]
+            # Tỷ lệ % chuẩn của 100 kỳ
+            target_probs = np.mean(f_bits_arr, axis=0)
+            target_pattern = [1 if p >= 0.5 else 0 for p in target_probs]
             
-            scores = {}
-            global_counts = Counter(data)
-            f_num_counts = Counter(follower_nums)
-            
+            scores = {}; global_counts = Counter(data); f_num_counts = Counter(follower_nums)
             for i in range(100):
                 s = 0
-                # Tầng 1: Số thực tế hay nổ sau trạng thái này
+                # Tầng 1: Số thực tế hay nổ sau nhịp này (Trọng số 1tr)
                 if i in f_num_counts: s += f_num_counts[i] * 1000000
-                
-                # Tầng 2: Khớp bộ Bit xu hướng (Ưu tiên thuộc tính)
+                # Tầng 2: Khớp bộ Bit xu hướng (Trọng số theo độ khớp % thực tế)
                 curr_i_bits = get_8bit(i)
-                match_count = sum(1 for a, b in zip(curr_i_bits, target_pattern) if a == b)
-                s += match_count * 10000  # Sửa lỗi match_bit -> match_count
-                
-                # Tầng 3: Vía tổng thể 2700 kỳ
+                # Tính điểm khớp có trọng số: khớp với Bit có % càng cao thì điểm càng nhiều
+                match_score = sum([target_probs[j] if curr_i_bits[j] == 1 else (1 - target_probs[j]) for j in range(8)])
+                s += match_score * 50000 
+                # Tầng 3: Vía tổng thể 2300 kỳ
                 s += global_counts.get(i, 0)
                 scores[i] = s
             
             full_ranked = [n for n, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
-            
             st.session_state.last_danh_sach = {
-                "🔥 DÀN KẾT (19s)": sorted(full_ranked[:19]),
-                "⭐ DÀN ĐẸP (20s)": sorted(full_ranked[19:39]),
-                "💎 TRUNG BÌNH (20s)": sorted(full_ranked[39:59]),
-                "🛡️ XÉT LÓT (20s)": sorted(full_ranked[59:79]),
+                "🔥 DÀN KẾT (19s)": sorted(full_ranked[:19]), "⭐ DÀN ĐẸP (20s)": sorted(full_ranked[19:39]),
+                "💎 TRUNG BÌNH (20s)": sorted(full_ranked[39:59]), "🛡️ XÉT LÓT (20s)": sorted(full_ranked[59:79]),
                 "🚫 DÀN LOẠI (19s)": sorted(full_ranked[79:])
             }
             st.session_state.last_num_soi = current_val
         else:
-            st.warning("Không tìm thấy trạng thái Bit tương tự trong lịch sử để quét nhịp.")
+            st.warning("Dữ liệu quá mỏng, không đủ mẫu quét nhịp.")
 
-    # Hiển thị kết quả
     if st.session_state.last_danh_sach:
-        st.write("### 📊 KẾT QUẢ PHÂN TÍCH")
         for label, s_list in st.session_state.last_danh_sach.items():
             st.markdown(f'<div class="dan-box"><div class="dan-title">{label}</div><div class="dan-content">{" ".join([f"<b>{x:02d}</b>" for x in s_list])}</div></div>', unsafe_allow_html=True)
 
-    # Xuất file
-    st.divider()
     export = json.dumps({"data": st.session_state.data_list, "history": st.session_state.history_log}, indent=4)
-    st.download_button("📥 LƯU DATA MỚI", export, "Matrix_V15_6_1.json", "application/json")
-else:
-    st.warning("👋 Hãy nạp dữ liệu ở Sidebar để bắt đầu.")
+    st.download_button("📥 LƯU DATA", export, "Matrix_V15_7.json", "application/json")
