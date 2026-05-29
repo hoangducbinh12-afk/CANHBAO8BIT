@@ -6,19 +6,22 @@ import re
 import numpy as np
 
 # --- 1. CSS CHUẨN MOBILE CHUYÊN NGHIỆP ---
-st.set_page_config(page_title="AI MATRIX ELITE V15.9.7", layout="wide")
+st.set_page_config(page_title="AI MATRIX ELITE V13.9.8", layout="wide")
 st.markdown("""
     <style>
     html, body { font-size: 14px !important; background-color: #f0f2f6; }
     .bit-container { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; }
     .bit-card { background: #000080; color: white; padding: 10px; border-radius: 8px; text-align: center; min-width: 80px; }
     .bit-val { font-size: 16px; font-weight: bold; color: #00ff00; }
+    
     .dan-box { padding: 15px; border-radius: 12px; border: 1px solid #e0e0e0; margin-bottom: 12px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .dan-title { font-weight: bold; font-size: 15px; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
     .dan-content { line-height: 1.8; font-family: 'Courier New', monospace; font-size: 18px; color: #1a1a1a; }
+    
     .hist-card { background: white; border-left: 5px solid #ddd; padding: 10px; margin-bottom: 5px; border-radius: 4px; font-size: 13px; }
     .win { border-left-color: #28a745; background: #f0fff4; }
     .loss { border-left-color: #dc3545; background: #fff5f5; }
+    
     div.stButton > button { width: 100%; height: 3.8em; border-radius: 10px; font-weight: bold; background: #FF4B4B; color: white; border:none; }
     .stNumberInput input { font-size: 18px !important; font-weight: bold !important; }
     </style>
@@ -42,7 +45,7 @@ if 'last_danh_sach' not in st.session_state: st.session_state.last_danh_sach = N
 if 'last_num_soi' not in st.session_state: st.session_state.last_num_soi = None
 
 with st.sidebar:
-    st.title("⚙️ HỆ THỐNG V15.9.7")
+    st.title("⚙️ HỆ THỐNG V13.9.8")
     up = st.file_uploader("Nạp Data (JSON)", type=['json'])
     if up:
         raw = json.load(up)
@@ -53,7 +56,7 @@ with st.sidebar:
     if st.button("🚨 RESET HỆ THỐNG"): st.session_state.clear(); st.rerun()
 
 # --- 4. GIAO DIỆN CHÍNH ---
-st.title("🎯 ELITE MATRIX 15.9.7")
+st.title("🎯 ELITE MATRIX 13.9.8")
 
 if st.session_state.data_list:
     data = st.session_state.data_list
@@ -61,9 +64,17 @@ if st.session_state.data_list:
     probs = np.mean(all_bits, axis=0)
     st.markdown('<div class="bit-container">' + "".join([f'<div class="bit-card"><div>{BIT_LABELS[i]}</div><div class="bit-val">{int(probs[i]*100)}%</div></div>' for i in range(8)]) + '</div>', unsafe_allow_html=True)
 
+    def get_f_counts(target, limit=150):
+        f_list = []; t_bits = get_8bit(target); cnt = 0
+        for i in range(len(data) - 2, -1, -1):
+            if get_8bit(data[i]) == t_bits:
+                f_list.append(data[i+1]); cnt += 1
+                if cnt == limit: break
+        return Counter(f_list)
+
     with st.expander("📌 BƯỚC 1: CẬP NHẬT KẾT QUẢ", expanded=True):
         c1, c2 = st.columns([2, 1])
-        new_res = c1.text_input("GĐB nổ:", placeholder="Ví dụ: 88")
+        new_res = c1.text_input("GĐB nổ:", placeholder="88")
         if c2.button("XÁC NHẬN") and new_res:
             try:
                 val = int(re.sub(r'\D', '', new_res)[-2:])
@@ -72,88 +83,75 @@ if st.session_state.data_list:
                     for label, s_list in st.session_state.last_danh_sach.items():
                         if val in s_list: tag = label; break
                 st.session_state.history_log.insert(0, {"Kỳ": f"Sau {st.session_state.last_num_soi:02d}", "Về": f"{val:02d}", "Dàn": tag})
-                st.session_state.data_list.append(val)
-                st.session_state.last_num_soi = val; st.rerun()
+                st.session_state.data_list.append(val); st.session_state.last_num_soi = val; st.rerun()
             except: st.error("Lỗi định dạng!")
 
     st.write("---")
     num_soi = st.number_input("SOI SAU CON SỐ:", 0, 99, value=st.session_state.last_num_soi if st.session_state.last_num_soi is not None else data[-1])
     
-    if st.button("🚀 PHÂN TÍCH ELITE (ANTI-LOSS LAG)"):
-        n_t1 = num_soi
-        n_t2 = data[-2] if len(data) >= 2 else None
-        
-        def get_f_counts(target, limit=150):
-            f_list = []; t_bits = get_8bit(target); cnt = 0
-            for i in range(len(data) - 2, -1, -1):
-                if get_8bit(data[i]) == t_bits:
-                    f_list.append(data[i+1]); cnt += 1
-                    if cnt == limit: break
-            return Counter(f_list)
-
-        f1 = get_f_counts(n_t1); f2 = get_f_counts(n_t2) if n_t2 is not None else Counter()
-        
-        # --- LOGIC NHỊP RƠI T-2 MỞ RỘNG (V15.9.7) ---
-        top_39_t2, top_59_t2, top_79_t2 = set(), set(), set()
-        if len(data) >= 3:
-            p_t2 = data[-2]; p_t3 = data[-3]
-            pf1 = get_f_counts(p_t2); pf2 = get_f_counts(p_t3)
-            t2_scr = {i: (pf1.get(i,0)*600000 + pf2.get(i,0)*150000) for i in range(100)}
-            t2_rank = [n for n, s in sorted(t2_scr.items(), key=lambda x: x[1], reverse=True)]
-            top_39_t2 = set(t2_rank[:39])
-            top_59_t2 = set(t2_rank[39:59])
-            top_79_t2 = set(t2_rank[:79]) # Toàn bộ Top 79 của T-2
-
-        cur_bits = get_8bit(n_t1); fol_bits = []
+    if st.button("🚀 PHÂN TÍCH GIAO THOA (FINAL OVERLAP)"):
+        # BƯỚC 1: TÍNH ĐIỂM NỀN KỲ T (CHỈ T-1 + 8-BIT)
+        f1 = get_f_counts(num_soi)
+        cur_bits = get_8bit(num_soi); fol_bits = []
         for i in range(len(data) - 2, -1, -1):
             if get_8bit(data[i]) == cur_bits:
                 fol_bits.append(get_8bit(data[i+1]))
                 if len(fol_bits) == 150: break
         
-        if fol_bits:
-            t_probs = np.mean(np.array(fol_bits), axis=0)
-            t_pattern = [1 if p >= 0.5 else 0 for p in t_probs]
+        t_probs = np.mean(np.array(fol_bits), axis=0)
+        t_pattern = [1 if p >= 0.5 else 0 for p in t_probs]
+        
+        scores_base = {}
+        for i in range(100):
+            s = sum([t_probs[j] if get_8bit(i)[j]==1 else (1-t_probs[j]) for j in range(8)]) * 100000
+            s += f1.get(i, 0) * 800000
+            if i in f1 and get_8bit(i) == t_pattern: s += 2500000
+            s += Counter(data).get(i, 0)
+            scores_base[i] = s
             
-            # --- SCORES CLEAN (DÀN CỐI & KẾT) ---
-            scores_clean = {}
-            for i in range(100):
-                s = 0; i_bits = get_8bit(i)
-                # 1. Khớp Bit
-                s += sum([t_probs[j] if i_bits[j]==1 else (1-t_probs[j]) for j in range(8)]) * 100000
-                # 2. Bạc nhớ T-1 & T-2
-                s += f1.get(i, 0)*600000 + f2.get(i, 0)*150000
-                # 3. ĐẨY QUÂN ANTI-LOSS (Nhịp rơi T-2)
-                if i in top_39_t2: s += 800000
-                if i in top_59_t2: s += 300000
-                if i in top_79_t2: s += 500000 # Cú hích cho toàn bộ Top 79 để tránh dàn Loại
-                # 4. Thưởng Siêu Cối
-                if i in f1 and i_bits == t_pattern: s += 2500000
-                s += Counter(data).get(i, 0)
-                scores_clean[i] = s
-            
-            ranked_clean = [n for n, s in sorted(scores_clean.items(), key=lambda x: x[1], reverse=True)]
-            top_19 = set(ranked_clean[:19])
+        # BƯỚC 2: XÁC ĐỊNH DANH SÁCH TOP 79 NỀN (KỲ T-1)
+        ranked_t1 = [n for n, s in sorted(scores_base.items(), key=lambda x: x[1], reverse=True)]
+        top_79_t1 = set(ranked_t1[:79])
 
-            # --- SCORES FULL (DÀN 39+ CÓ NGHỊCH ĐẢO) ---
-            scores_full = {}
-            inv_map = { (n%10)*10 + (n//10): c * 400000 for n, c in f1.items() if c >= 2 }
-            for i in range(100):
-                s = scores_clean[i]
-                if i not in top_19 and i in inv_map: s += inv_map[i]
-                scores_full[i] = s
-            
-            full_ranked = [n for n, s in sorted(scores_full.items(), key=lambda x: x[1], reverse=True)]
-            
-            st.session_state.last_danh_sach = {
-                "🔴 DÀN CỐI (9s)": sorted(full_ranked[:9]),
-                "🔥 DÀN KẾT (10s)": sorted(full_ranked[9:19]),
-                "⭐ DÀN ĐẸP (20s)": sorted(full_ranked[19:39]),
-                "💎 TRUNG BÌNH (20s)": sorted(full_ranked[39:59]),
-                "🛡️ XÉT LÓT (20s)": sorted(full_ranked[59:79]),
-                "🚫 DÀN LOẠI (21s)": sorted(full_ranked[79:])
-            }
-            st.session_state.last_num_soi = num_soi
-        else: st.warning("Không đủ mẫu quét nhịp.")
+        # BƯỚC 3: XÁC ĐỊNH DANH SÁCH TOP 79 KỲ T-2
+        top_79_t2 = set()
+        if len(data) >= 3:
+            p_t2 = data[-2]; p_t3 = data[-3]
+            pf1 = get_f_counts(p_t2); pf2 = get_f_counts(p_t3)
+            # Điểm nền T-2 (Chỉ dùng Bạc nhớ T-2 để xác định Rank của kỳ đó)
+            t2_scr = {i: (pf1.get(i,0)*800000 + Counter(data).get(i,0)) for i in range(100)}
+            t2_rank = [n for n, s in sorted(t2_scr.items(), key=lambda x: x[1], reverse=True)]
+            top_79_t2 = set(t2_rank[:79])
+
+        # BƯỚC 4: CỘNG ĐIỂM GIAO THOA VÀ HẠ DÀN LẦN CUỐI
+        scores_final = {}
+        top_19_clean = set(ranked_t1[:19]) # Chặn quân nghịch đảo lọt Cối/Kết
+        
+        for i in range(100):
+            s = scores_base[i]
+            # CHỈ CỘNG ĐIỂM NẾU TRÙNG NHAU Ở CẢ 2 TOP 79
+            if i in top_79_t1 and i in top_79_t2:
+                s += 1500000 # Bơm điểm Turbo
+            scores_final[i] = s
+        
+        # Thêm logic quân Nghịch đảo cho dàn 39+ (như cũ)
+        inv_map = { (n%10)*10 + (n//10): c * 400000 for n, c in f1.items() if c >= 2 }
+        scores_with_inv = {}
+        for i in range(100):
+            s = scores_final[i]
+            if i not in top_19_clean and i in inv_map: s += inv_map[i]
+            scores_with_inv[i] = s
+
+        full_ranked = [n for n, s in sorted(scores_with_inv.items(), key=lambda x: x[1], reverse=True)]
+        
+        st.session_state.last_danh_sach = {
+            "🔴 DÀN CỐI (9s)": sorted(full_ranked[:9]),
+            "🔥 DÀN KẾT (10s)": sorted(full_ranked[9:19]),
+            "⭐ DÀN ĐẸP (20s)": sorted(full_ranked[19:39]),
+            "💎 TRUNG BÌNH (20s)": sorted(full_ranked[39:59]),
+            "🛡️ XÉT LÓT (20s)": sorted(full_ranked[59:79]),
+            "🚫 DÀN LOẠI (21s)": sorted(full_ranked[79:])
+        }
 
     if st.session_state.last_danh_sach:
         st.write("### 📊 KẾT QUẢ DÀN SỐ")
@@ -171,4 +169,4 @@ if st.session_state.data_list:
 
     st.divider()
     exp_json = json.dumps({"data": st.session_state.data_list, "history": st.session_state.history_log}, indent=4)
-    st.download_button("📥 TẢI DATA MỚI", exp_json, "Elite_Matrix_V15_9_7.json", "application/json")
+    st.download_button("📥 TẢI DATA MỚI", exp_json, "Elite_Matrix_V13_9_8.json", "application/json")
