@@ -45,7 +45,7 @@ if 'last_danh_sach' not in st.session_state: st.session_state.last_danh_sach = N
 if 'last_num_soi' not in st.session_state: st.session_state.last_num_soi = None
 
 with st.sidebar:
-    st.title("⚙️ HỆ THỐNG V15.9")
+    st.title("⚙️ HỆ THỐNG V15.9.1")
     up = st.file_uploader("Nạp Data (JSON)", type=['json'])
     if up:
         raw = json.load(up)
@@ -70,14 +70,23 @@ if st.session_state.data_list:
         c1, c2 = st.columns([2, 1])
         new_res = c1.text_input("GĐB nổ:", placeholder="Ví dụ: 88")
         if c2.button("XÁC NHẬN") and new_res:
-            val = int(new_res[-2:])
-            tag = "🚫 DÀN LOẠI"
-            if st.session_state.last_danh_sach:
-                for label, s_list in st.session_state.last_danh_sach.items():
-                    if val in s_list: tag = label; break
-            st.session_state.history_log.insert(0, {"Kỳ": f"Sau {st.session_state.last_num_soi:02d}", "Về": f"{val:02d}", "Dàn": tag})
-            st.session_state.data_list.append(val)
-            st.session_state.last_num_soi = val; st.rerun()
+            try:
+                # Trích xuất 2 số cuối chuẩn
+                val = int(re.sub(r'\D', '', new_res)[-2:])
+                tag = "🚫 DÀN LOẠI"
+                if st.session_state.last_danh_sach:
+                    for label, s_list in st.session_state.last_danh_sach.items():
+                        if val in s_list: tag = label; break
+                
+                # FIX KHÓA DỮ LIỆU ĐỒNG BỘ
+                st.session_state.history_log.insert(0, {
+                    "Kỳ": f"Sau {st.session_state.last_num_soi:02d}", 
+                    "Về": f"{val:02d}", 
+                    "Dàn": tag
+                })
+                st.session_state.data_list.append(val)
+                st.session_state.last_num_soi = val; st.rerun()
+            except: st.error("Nhập sai định dạng!")
 
     st.write("---")
     num_soi = st.number_input("SOI SAU CON SỐ:", 0, 99, value=st.session_state.last_num_soi if st.session_state.last_num_soi is not None else data[-1])
@@ -91,7 +100,7 @@ if st.session_state.data_list:
                 follower_nums.append(data[i+1])
                 follower_bits.append(get_8bit(data[i+1]))
                 count += 1
-                if count == 100: break
+                if count == 150: break # Tăng mẫu quét lên 150 để chính xác hơn
         
         if follower_bits:
             f_bits_arr = np.array(follower_bits)
@@ -108,7 +117,6 @@ if st.session_state.data_list:
                 # 2. Điểm Bạc nhớ trạng thái
                 if i in f_num_counts:
                     s += f_num_counts[i] * 500000
-                    # THƯỞNG CỐI: Nếu con số này nổ trong lịch sử MÀ CÒN KHỚP HOÀN TOÀN Bit dự báo
                     if curr_i_bits == target_pattern: s += 2000000 
                 # 3. Vía tổng thể
                 s += global_counts.get(i, 0)
@@ -134,13 +142,12 @@ if st.session_state.data_list:
         for i, (label, s_list) in enumerate(ds.items()):
             st.markdown(f"""<div class="dan-box"><div class="dan-title" style="color:{clrs[i]};">{label}</div><div class="dan-content">{' '.join([f"<b>{x:02d}</b>" for x in s_list])}</div></div>""", unsafe_allow_html=True)
 
-    # LỊCH SỬ ĐỐI SOÁT (FIXED KEYERROR)
+    # --- LỊCH SỬ ĐỐI SOÁT (FIXED & ĐỒNG BỘ KHÓA) ---
     if st.session_state.history_log:
         st.write("### 📋 LỊCH SỬ ĂN DÀN")
         for h in st.session_state.history_log[:15]:
-            # Dùng .get() để tránh lỗi KeyError
             ky = h.get("Kỳ", "N/A")
-            so = h.get("Số", "N/A")
+            so = h.get("Về", "N/A") # Đồng bộ dùng khóa "Về"
             dan = h.get("Dàn", "N/A")
             is_win = "🚫" not in dan
             cls = "win" if is_win else "loss"
@@ -148,4 +155,4 @@ if st.session_state.data_list:
 
     st.divider()
     exp_json = json.dumps({"data": st.session_state.data_list, "history": st.session_state.history_log}, indent=4)
-    st.download_button("📥 TẢI DATA MỚI", exp_json, "Elite_Matrix_V15_9.json", "application/json")
+    st.download_button("📥 TẢI DATA MỚI", exp_json, "Elite_Matrix_V15_9_1.json", "application/json")
